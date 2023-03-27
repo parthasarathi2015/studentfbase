@@ -1,6 +1,7 @@
 from django.db import models
 from .services.utils import get_fb
 import uuid
+from logger import logging
 #    Create your models here.
 class Classroom(models.Model):
     Credits = (
@@ -45,7 +46,6 @@ class Student(models.Model):
     
     def delete(self, *args, **kwargs): 
         id = self.id
-        print("id:",self.id)
         super(Student, self).delete(*args, **kwargs)
         if id:
             self.delete_firebase(id)
@@ -54,19 +54,15 @@ class Student(models.Model):
     def delete_firebase(self,id):
         db = get_fb()
         if db:
-            print("uuid:",id)
             ref = db.child('student')
             key =  None
             for es in ref.get().each():
                 if es.val()['id'] == str(id):
                     key = es.key()
-                    break                 
-                    
+                    break   
 
             if key:
                 ref.child(key).delete()
-           
-
 
 
     def update_firebase(self,instance):
@@ -74,6 +70,16 @@ class Student(models.Model):
         if db:
             ref = db.child('student')
             instance = Student.objects.get(pk=instance.id)
+            marksobtain = {}
+            if MarksObtain.objects.get(student_id=instance.id).exist():
+                marks = MarksObtain.objects.get(student_id=instance.id)
+                marksobtain = {
+                    "id":str(marks.id),
+                    "subject": marks.subject.name,
+                    "marks": marks.marks,
+                    "created_at": str(marks.created_at),
+                    "updated_at":  str(marks.updated_at),
+                }
             classroom = {}
             if instance.classroom:
                 classroom = {
@@ -91,6 +97,7 @@ class Student(models.Model):
                     "std_gender": instance.std_gender,
                     "std_class": instance.std_class,
                     "classroom": classroom,
+                    "marksobtain": marksobtain,
                     "created_at":str( instance.created_at),
                     "updated_at": str(instance.updated_at),
             }
@@ -99,13 +106,15 @@ class Student(models.Model):
                 for es in ref.get().each():
                     if es and 'id' in es.val() and es.val()['id'] == str(instance.id):
                         key = es.key()
-                        break                  
+                        break            
                     
-
-            if key:
-                db.child('student').child(key).update(data) 
-            else:
-                db.child('student').push(data)
+            try:
+                if key:
+                    db.child('student').child(key).update(data) 
+                else:
+                    db.child('student').push(data)
+            except:
+                pass
 
 class Subject(models.Model):
     id = models.UUIDField(primary_key=True, unique=True, default=uuid.uuid4, editable=False)
@@ -122,8 +131,56 @@ class MarksObtain(models.Model):
     def __str__(self):
         return f"{self.student.std_name}({self.student.std_class})"
 
-    def save(self, force_insert=False, force_update=False, using=None,
-             update_fields=None):
-        # self.update_firebase(self)
-        
-        return super().save(force_insert, force_update, using, update_fields)
+    def save(self, *args, **kwargs): 
+        super(MarksObtain, self).save(*args, **kwargs)
+        if self:
+            try:
+                self.update_firebase_marks(self)   
+            except:
+                pass  
+    
+    def delete(self, *args, **kwargs): 
+        id = self.id
+        super(MarksObtain, self).delete(*args, **kwargs)
+        if id:
+            self.delete_firebase_marks(self)
+
+    def delete_firebase_marks(self,instance):
+        db = get_fb()
+        if db:
+            ref = db.child('student')
+            key =  None
+            for es in ref.get().each():
+                if es and 'id' in es.val() and es.val()['id'] == str(instance.student.id):
+                    key = es.key()
+                    break 
+
+            if key:
+                ref.child(key).child("marksobtain").update({})
+           
+    def update_firebase_marks(self,instance):
+        db = get_fb()
+        if db:
+            ref = db.child('student')
+            instance = MarksObtain.objects.get(pk=instance.id)
+            marksobtain = {}
+            if instance:
+                marksobtain = {
+                    "id":str(instance.id),
+                    "subject": instance.subject.name,
+                    "marks": instance.marks,
+                    "created_at": str(instance.created_at),
+                    "updated_at":  str(instance.updated_at),
+                }
+            key =  None
+            if ref.get().each():
+                for es in ref.get().each():
+                    if es and 'id' in es.val() and es.val()['id'] == str(instance.student.id):
+                        key = es.key()
+                        break 
+                if key:
+                    db.child('student').child(key).child('marksobtain').update(marksobtain) 
+                else:
+                    db.child('student').child(key).child('marksobtain').push(marksobtain) 
+
+
