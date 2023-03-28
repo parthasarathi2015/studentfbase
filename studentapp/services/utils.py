@@ -14,11 +14,22 @@ def get_fb():
             "messagingSenderId":  os.getenv('messagingSenderId'),
             "appId": os.getenv('appId'),
         }
-        firebase =  pyrebase.initialize_app(firebaseConfig) 
-        return firebase.database()
+        return pyrebase.initialize_app(firebaseConfig) 
     except:
         pass
     return None
+
+
+def get_fb_auth():
+    fb = get_fb()
+    auth = fb.auth()
+    try:
+        user = auth.sign_in_with_email_and_password(os.getenv('FB_USER'),os.getenv('FB_PASSWORD'))
+    except:
+        user = None
+        
+    return user
+
 
 
 
